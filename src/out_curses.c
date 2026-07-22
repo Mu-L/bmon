@@ -151,7 +151,7 @@ static void put_line(const char *fmt, ...)
 	va_list args;
 	char *buf;
 	int len;
-	int x, y __unused__;
+	int x, y BMON_UNUSED;
 
 	getyx(stdscr, y, x);
 
