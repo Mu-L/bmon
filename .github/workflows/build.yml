@@ -6,6 +6,7 @@ on:
     branches:
       - master
       - ci
+      - ci-werror
     paths-ignore:
       - 'README.md'
       - 'NEWS'
@@ -17,6 +18,7 @@ on:
     branches:
       - master
       - ci
+      - ci-werror
     paths-ignore:
       - 'README.md'
       - 'NEWS'
@@ -109,7 +111,7 @@ jobs:
       - name: Configure
         run: |
           ./autogen.sh
-          ./configure
+          ./configure --enable-werror
 
       - name: Make
         id: build
@@ -123,7 +125,7 @@ jobs:
 
       - name: Distcheck
         if: contains(matrix.cfg.os, 'ubuntu:24.04')
-        run: make distcheck
+        run: make distcheck DISTCHECK_CONFIGURE_FLAGS=--enable-werror
 
   macOS:
     runs-on: ${{ matrix.cfg.os }}
@@ -150,7 +152,7 @@ jobs:
           export PATH="$(brew --prefix)/opt/gettext/bin:$PATH"
           export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           ./autogen.sh
-          ./configure \
+          ./configure --enable-werror \
             CPPFLAGS="-I$(brew --prefix)/include" \
             LDFLAGS="-L$(brew --prefix)/lib"
 
@@ -197,7 +199,7 @@ jobs:
         shell: alpine.sh {0}
         run: |
           ./autogen.sh
-          ./configure
+          ./configure --enable-werror
 
       - name: Make
         id: build
@@ -228,7 +230,7 @@ jobs:
             cd "$GITHUB_WORKSPACE"
             git config --global --add safe.directory "$GITHUB_WORKSPACE"
             ./autogen.sh
-            ./configure
+            ./configure --enable-werror
             gmake -j"$(sysctl -n hw.ncpu)"
             ./src/bmon -o 'ascii:quitafter=1'
 
@@ -252,7 +254,7 @@ jobs:
       - name: Configure
         run: |
           ./autogen.sh
-          ./configure CC=clang
+          ./configure --enable-werror CC=clang
 
       - name: Make
         id: build

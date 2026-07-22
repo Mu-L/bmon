@@ -8,6 +8,7 @@ bmon_CFLAGS = \
 	-DSYSCONFDIR=\"$(sysconfdir)\" \
 	-D_GNU_SOURCE \
 	-Wall \
+	$(WERROR) \
 	$(CURSES_CFLAGS) \
 	$(CONFUSE_CFLAGS) \
 	$(LIBNL_CFLAGS) \
