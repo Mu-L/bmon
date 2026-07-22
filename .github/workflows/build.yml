@@ -1,0 +1,262 @@
+name: Build
+
+# Controls when the action will run.
+on:
+  push:
+    branches:
+      - master
+      - ci
+    paths-ignore:
+      - 'README.md'
+      - 'NEWS'
+      - 'ChangeLog'
+      - '**/*.md'
+      - 'LICENSE.*'
+
+  pull_request:
+    branches:
+      - master
+      - ci
+    paths-ignore:
+      - 'README.md'
+      - 'NEWS'
+      - 'ChangeLog'
+      - '**/*.md'
+      - 'LICENSE.*'
+
+  # Allow running this workflow manually from the Actions tab.
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Quiets Node 20 deprecation annotations for actions/* until they ship Node 24 builds.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  Linux:
+    runs-on: ubuntu-latest
+    name: ${{ matrix.cfg.name }}
+    container: ${{ matrix.cfg.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - { os: 'ubuntu:22.04',  name: 'Ubuntu 22.04' }
+          - { os: 'ubuntu:24.04',  name: 'Ubuntu 24.04' }
+          - { os: 'ubuntu:26.04',  name: 'Ubuntu 26.04' }
+          - { os: 'debian:12',     name: 'Debian 12' }
+          - { os: 'debian:13',     name: 'Debian 13' }
+          - { os: 'fedora:44',     name: 'Fedora 44' }
+          - { os: 'rockylinux:8',  name: 'Rocky Linux 8' }
+          - { os: 'rockylinux:9',  name: 'Rocky Linux 9' }
+          - { os: 'rockylinux/rockylinux:10', name: 'Rocky Linux 10' }
+          - { os: 'alpine:latest', name: 'Alpine x86_64' }
+
+    steps:
+      - name: Install git for checkout
+        run: |
+          case "${{ matrix.cfg.os }}" in
+            ubuntu*|debian*)
+              apt-get update -q -y
+              DEBIAN_FRONTEND=noninteractive apt-get install -q -y git ca-certificates
+              ;;
+            rocky*|fedora*)
+              dnf -y install git
+              ;;
+            alpine*)
+              apk update
+              apk add git
+              ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          case "${{ matrix.cfg.os }}" in
+            ubuntu*|debian*)
+              apt-get update -q -y
+              DEBIAN_FRONTEND=noninteractive apt-get install -q -y \
+                build-essential autoconf automake libtool pkg-config \
+                libconfuse-dev libncurses-dev \
+                libnl-3-dev libnl-route-3-dev
+              ;;
+            fedora*)
+              dnf -y install \
+                gcc make autoconf automake libtool pkgconf \
+                libconfuse-devel ncurses-devel libnl3-devel
+              ;;
+            rocky*)
+              dnf -y install epel-release dnf-plugins-core
+              dnf config-manager --set-enabled powertools \
+                || dnf config-manager --set-enabled crb
+              dnf -y install \
+                gcc make autoconf automake libtool pkgconf \
+                libconfuse-devel ncurses-devel libnl3-devel
+              ;;
+            alpine*)
+              apk add \
+                build-base autoconf automake libtool pkgconf \
+                linux-headers confuse-dev ncurses-dev libnl3-dev
+              ;;
+          esac
+
+      - name: Configure
+        run: |
+          ./autogen.sh
+          ./configure
+
+      - name: Make
+        id: build
+        run: make -j$(nproc)
+
+      - name: Install
+        run: make install
+
+      - name: Smoke test
+        run: ./src/bmon -o 'ascii:quitafter=1'
+
+      - name: Distcheck
+        if: contains(matrix.cfg.os, 'ubuntu:24.04')
+        run: make distcheck
+
+  macOS:
+    runs-on: ${{ matrix.cfg.os }}
+    name: ${{ matrix.cfg.name }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - { os: macos-15-intel, name: 'macOS intel' }
+          - { os: macos-latest,   name: 'macOS arm' }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          brew install autoconf automake libtool pkg-config confuse
+
+      - name: Configure
+        run: |
+          eval "$(brew shellenv)"
+          export PATH="$(brew --prefix)/opt/gettext/bin:$PATH"
+          export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          ./autogen.sh
+          ./configure \
+            CPPFLAGS="-I$(brew --prefix)/include" \
+            LDFLAGS="-L$(brew --prefix)/lib"
+
+      - name: Make
+        id: build
+        run: make -j$(sysctl -n hw.ncpu)
+
+      - name: Install
+        run: sudo make install
+
+      - name: Smoke test
+        run: ./src/bmon -o 'ascii:quitafter=1'
+
+  Alpine:
+    runs-on: ubuntu-latest
+    name: Alpine ${{ matrix.platform.arch }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { arch: riscv64 } # emulated
+          - { arch: x86 }
+
+    steps:
+      - name: Install binfmt support
+        run: |
+          sudo apt-get update -q -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -q -y binfmt-support
+
+      - name: Setup Alpine
+        uses: jirutka/setup-alpine@ae3b3ddba35054804fc4a3507b519fa7e8152050
+        with:
+          arch: ${{ matrix.platform.arch }}
+          branch: v3.20
+          packages: >
+            build-base autoconf automake libtool pkgconf
+            linux-headers confuse-dev ncurses-dev libnl3-dev
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure
+        shell: alpine.sh {0}
+        run: |
+          ./autogen.sh
+          ./configure
+
+      - name: Make
+        id: build
+        shell: alpine.sh {0}
+        run: make -j$(nproc)
+
+      - name: Smoke test
+        shell: alpine.sh {0}
+        run: ./src/bmon -o 'ascii:quitafter=1'
+
+  FreeBSD:
+    runs-on: ubuntu-latest
+    name: FreeBSD
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build on FreeBSD
+        id: build
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg install -y autoconf automake libtool pkgconf libconfuse gmake git
+          run: |
+            set -e
+            cd "$GITHUB_WORKSPACE"
+            git config --global --add safe.directory "$GITHUB_WORKSPACE"
+            ./autogen.sh
+            ./configure
+            gmake -j"$(sysctl -n hw.ncpu)"
+            ./src/bmon -o 'ascii:quitafter=1'
+
+  Clang:
+    runs-on: ubuntu-latest
+    name: Clang
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -q -y \
+            build-essential clang autoconf automake libtool pkg-config \
+            libconfuse-dev libncurses-dev \
+            libnl-3-dev libnl-route-3-dev
+
+      - name: Configure
+        run: |
+          ./autogen.sh
+          ./configure CC=clang
+
+      - name: Make
+        id: build
+        run: make -j$(nproc)
+
+      - name: Smoke test
+        run: ./src/bmon -o 'ascii:quitafter=1'
