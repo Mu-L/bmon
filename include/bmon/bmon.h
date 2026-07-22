@@ -60,11 +60,12 @@ enum {
 #if defined __GNUC__
 #define __init __attribute__ ((constructor))
 #define __exit __attribute__ ((destructor))
-#define __unused__ __attribute__ ((unused))
+/* Do not use a __* name: reserved and clashes with macOS system headers. */
+#define BMON_UNUSED __attribute__ ((__unused__))
 #else
 #define __init
 #define __exit
-#define __unused__
+#define BMON_UNUSED
 #endif
 
 #ifdef DEBUG
