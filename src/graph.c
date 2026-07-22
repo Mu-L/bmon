@@ -62,7 +62,7 @@ static void fill_table(struct graph *g, struct graph_table *tbl,
 		       struct history *h, struct history_store *data)
 {
 	struct graph_cfg *cfg = &g->g_cfg;
-	uint64_t max = 0;
+	uint64_t max = 0, hv;
 	double v;
 	int i, n, t;
 	float half_step, step;
@@ -89,9 +89,9 @@ static void fill_table(struct graph *g, struct graph_table *tbl,
 	for (n = h->h_index, i = 0; i < cfg->gc_width; i++) {
 		if (--n < 0)
 			n = h->h_definition->hd_size - 1;
-		v = history_data(h, data, n);
-		if (v != HISTORY_UNKNOWN && max < v)
-			max = v;
+		hv = history_data(h, data, n);
+		if (hv != HISTORY_UNKNOWN && max < hv)
+			max = hv;
 	}
 
 	step = (double) max / (double) cfg->gc_height;
@@ -105,16 +105,16 @@ static void fill_table(struct graph *g, struct graph_table *tbl,
 
 		if (--n < 0)
 			n = h->h_definition->hd_size - 1;
-		v = history_data(h, data, n);
+		hv = history_data(h, data, n);
 
-		if (v == HISTORY_UNKNOWN) {
+		if (hv == HISTORY_UNKNOWN) {
 			for (t = 0; t < cfg->gc_height; t++)
 				*(at_row(cfg, col, t)) = cfg->gc_unknown;
-		} else if (v > 0) {
+		} else if (hv > 0) {
 			*(at_row(cfg, col, 0)) = cfg->gc_noise;
 
 			for (t = 0; t < cfg->gc_height; t++)
-				if (v >= (tbl->gt_scale[t] - half_step))
+				if ((double) hv >= (tbl->gt_scale[t] - half_step))
 					*(at_row(cfg, col, t)) = cfg->gc_foreground;
 		}
 	}

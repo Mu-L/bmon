@@ -101,7 +101,7 @@ static char *get_token(struct element_group *g, struct element *e,
 		}
 	} else if (!strncasecmp(token, "attr:", 5)) {
 		const char *type = token + 5;
-		char *name = strchr(type, ':');
+		const char *name = strchr(type, ':');
 		struct attr_def *def;
 		struct attr *a;
 

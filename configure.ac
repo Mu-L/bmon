@@ -161,6 +161,17 @@ AC_ARG_ENABLE(debug,
 
 #####################################################################
 ##
+## -Werror
+##
+#####################################################################
+AC_ARG_ENABLE([werror],
+	[AS_HELP_STRING([--enable-werror],
+		[treat compiler warnings as errors (default: disabled)])],
+	[], [enable_werror=no])
+AS_IF([test "x$enable_werror" = "xyes"], [WERROR="-Werror"], [WERROR=""])
+
+#####################################################################
+##
 ## target os eval
 ##
 #####################################################################
@@ -195,6 +206,7 @@ AC_SUBST(DEBUG)
 AC_SUBST(STATIC)
 AC_SUBST(SYS)
 AC_SUBST(ARCH)
+AC_SUBST(WERROR)
 
 AC_SUBST(CURSES)
 
